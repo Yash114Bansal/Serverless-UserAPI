@@ -8,12 +8,13 @@ service: userapi
 stages:
   default:
     params:
-      tableName: "users-table-${sls:stage}"
+      tableName: "users-table-dev"
 
 plugins:
   - serverless-wsgi
   - serverless-python-requirements
   - serverless-dynamodb
+
 custom:
   wsgi:
     app: app.app
@@ -39,19 +40,18 @@ provider:
             - dynamodb:DeleteItem
           Resource:
             - Fn::GetAtt: [UsersTable, Arn]
+            - Fn::GetAtt: [ManagersTable, Arn]
   environment:
-    USERS_TABLE: ${param:tableName}
+    USERS_TABLE: users-table-dev
+    MANAGERS_TABLE: users-table-dev-managers
 
 functions:
   api:
     handler: wsgi_handler.handler
     events:
       - http:
-          path: /
-          method: ANY
-      - http:
-          path: /{proxy+}
-          method: ANY
+          path: create_user
+          method: post
 
 resources:
   Resources:
@@ -59,12 +59,26 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
-          - AttributeName: userId
+          - AttributeName: user_id
             AttributeType: S
         KeySchema:
-          - AttributeName: userId
+          - AttributeName: user_id
             KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
         TableName: ${param:tableName}
+
+    ManagersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${param:tableName}-managers
+        AttributeDefinitions:
+          - AttributeName: manager_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: manager_id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
