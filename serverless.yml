@@ -52,6 +52,9 @@ functions:
       - http:
           path: create_user
           method: post
+      - http:
+          path: get_users
+          method: post
 
 resources:
   Resources:
