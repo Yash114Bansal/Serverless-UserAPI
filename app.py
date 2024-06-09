@@ -34,7 +34,9 @@ def dynamodb_to_dict(item):
 
 @app.route("/create_user", methods=["POST"])
 def create_user():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Following fields are required in the request body: full_name, mob_num, pan_num",}), 400
 
     full_name = data.get("full_name")
     mob_num = data.get("mob_num")
@@ -79,7 +81,7 @@ def create_user():
             "pan_num": {"S": pan_num},
             "manager_id": {"S": manager_id} if manager_id else {"NULL": True},
             "created_at": {"S": created_at},
-            "updated_at": {"S": created_at},
+            "updated_at": {"S": ''},
             "is_active": {"BOOL": True},
         },
     )
@@ -122,3 +124,40 @@ def get_users():
     response = dynamodb_client.scan(TableName=USERS_TABLE)
     dict_response =  [dynamodb_to_dict(item) for item in response.get("Items", [])]
     return jsonify(dict_response), 200
+
+@app.route('/delete_user', methods=['POST'])
+def delete_user():
+    data = request.get_json(silent=True)
+    if data is None:
+        data = {}
+
+    user_id = data.get('user_id')
+    mob_num = data.get('mob_num')
+
+    if user_id:
+        response = dynamodb_client.get_item(TableName=USERS_TABLE, Key={'user_id': {'S': user_id}})
+        if 'Item' in response:
+            delete_response = dynamodb_client.delete_item(TableName=USERS_TABLE, Key={'user_id': {'S': user_id}})
+            print(delete_response)
+            return jsonify({"message": "User Deleted Successfully"}), 200
+        
+        return jsonify({"error": "No User Exist With Given user_id"}), 404
+    
+    if mob_num:
+        mob_num = mob_num.removeprefix("0").removeprefix("+91").strip()
+
+        response = dynamodb_client.scan(
+            TableName=USERS_TABLE,
+            FilterExpression='mob_num = :val',
+            ExpressionAttributeValues={':val': {'S': mob_num}}
+        )
+        
+        items = response.get('Items', [])
+        if items:
+            user_id = items[0]['user_id']['S']
+            dynamodb_client.delete_item(TableName=USERS_TABLE, Key={'user_id': {'S': user_id}})
+            return jsonify({"message": "User Deleted Successfully"}), 200
+        
+        return jsonify({"error": "No User Exist With Given phone"}), 404
+
+    return jsonify({"error": "One of following fields are required user_id/mob_num"}), 400

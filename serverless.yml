@@ -55,6 +55,9 @@ functions:
       - http:
           path: get_users
           method: post
+      - http:
+          path: delete_user
+          method: post
 
 resources:
   Resources:
