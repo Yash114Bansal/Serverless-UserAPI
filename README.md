@@ -9,7 +9,7 @@ This is a serverless functions project provides a user management API using AWS 
 
    ```
    git clone https://github.com/Yash114Bansal/Serverless-UserAPI
-   cd user-management-api
+   cd Serverless-UserAPI
    ```
 
 2. Install dependencies:
