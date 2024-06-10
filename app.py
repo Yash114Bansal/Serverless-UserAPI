@@ -127,7 +127,7 @@ def get_users():
             FilterExpression="manager_id = :val",
             ExpressionAttributeValues={":val": {"S": manager_id}},
         )
-        return jsonify({"users": response.get("Items", [])}), 200
+        return jsonify([dynamodb_to_dict(item) for item in response.get("Items", [])]), 200
 
     response = dynamodb_client.scan(TableName=USERS_TABLE)
     dict_response =  [dynamodb_to_dict(item) for item in response.get("Items", [])]
@@ -234,6 +234,10 @@ def update_user():
 
                 if not user['manager_id']['S']:
                     user['manager_id'] = {'S': update_data['manager_id']}
+
+                elif user['manager_id']['S'] == update_data['manager_id']:
+                    # ID is not changed
+                    pass
                 else:
                     user["is_active"] = {"BOOL": False}
                     
