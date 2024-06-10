@@ -1,21 +1,14 @@
 # User Management API
 
-This project provides a user management API using AWS Lambda and DynamoDB. The API includes endpoints for creating, retrieving, updating, and deleting users. The project is set up using the Serverless Framework.
+This is a serverless functions project provides a user management API using AWS Lambda and DynamoDB. The API includes endpoints for creating, retrieving, updating, and deleting users. The project is set up using the Serverless Framework.
 
-## Setup
-
-### Prerequisites
-
-- AWS account with free tier access.
-- AWS CLI configured with appropriate permissions.
-- Serverless Framework installed globally.
 
 ### Installation
 
 1. Clone the repository:
 
    ```
-   git clone <repository-url>
+   git clone https://github.com/Yash114Bansal/Serverless-UserAPI
    cd user-management-api
    ```
 
