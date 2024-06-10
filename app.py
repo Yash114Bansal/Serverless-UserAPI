@@ -66,6 +66,7 @@ def create_user():
         response = dynamodb_client.get_item(
             TableName=MANAGERS_TABLE, Key={"manager_id": {"S": manager_id}}
         )
+
         if "Item" not in response:
             return jsonify({"error": "Invalid manager_id"}), 400
 
@@ -79,7 +80,7 @@ def create_user():
             "full_name": {"S": full_name},
             "mob_num": {"S": mob_num},
             "pan_num": {"S": pan_num},
-            "manager_id": {"S": manager_id} if manager_id else {"NULL": True},
+            "manager_id": {"S": manager_id} if manager_id else {"S": ''},
             "created_at": {"S": created_at},
             "updated_at": {"S": ''},
             "is_active": {"BOOL": True},
@@ -101,7 +102,7 @@ def get_users():
     if user_id:
         response = dynamodb_client.get_item(TableName=USERS_TABLE, Key={"user_id": {"S": user_id}})
         if "Item" in response:
-            return jsonify({"users": [response["Item"]]}), 200
+            return jsonify(dynamodb_to_dict(response["Item"])), 200
         else:
             return jsonify({"users": []}), 200
 
@@ -111,7 +112,14 @@ def get_users():
             FilterExpression="mob_num = :val",
             ExpressionAttributeValues={":val": {"S": mob_num}},
         )
-        return jsonify({"users": response.get("Items", [])}), 200
+    
+        if "Items" in response:
+            users = response["Items"]
+            if users:
+                users = dynamodb_to_dict(users[0])
+            return jsonify(users), 200
+        else:
+            return jsonify({[]}), 200
 
     if manager_id:
         response = dynamodb_client.scan(
@@ -138,7 +146,6 @@ def delete_user():
         response = dynamodb_client.get_item(TableName=USERS_TABLE, Key={'user_id': {'S': user_id}})
         if 'Item' in response:
             delete_response = dynamodb_client.delete_item(TableName=USERS_TABLE, Key={'user_id': {'S': user_id}})
-            print(delete_response)
             return jsonify({"message": "User Deleted Successfully"}), 200
         
         return jsonify({"error": "No User Exist With Given user_id"}), 404
@@ -161,3 +168,95 @@ def delete_user():
         return jsonify({"error": "No User Exist With Given phone"}), 404
 
     return jsonify({"error": "One of following fields are required user_id/mob_num"}), 400
+
+@app.route('/update_user', methods=['POST'])
+def update_user():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Following fields are required user_ids, update_data"}), 400
+    
+    user_ids = data.get('user_ids')
+    update_data = data.get('update_data')
+
+    if not user_ids or not update_data:
+        return jsonify({"error": "Following fields are required user_ids, update_data"}), 400
+    
+    if 'manager_id' in update_data and len(update_data) > 1 or 'manager_id' not in update_data and len(user_ids)>1:
+        return jsonify({"error": "Only manager_id can be updated in bulk"}), 400
+    
+
+    # Checked before loop so that db query do not call again and again for each user
+    if 'manager_id' in update_data:
+        manager_id = update_data['manager_id']
+        if manager_id:
+            response = dynamodb_client.get_item(
+                TableName=MANAGERS_TABLE,
+                Key={'manager_id': {'S': manager_id}}
+            )
+        if 'Item' not in response:
+            return jsonify({"error": "Invalid manager_id"}), 400
+
+    error_list = []
+
+    for user_id in user_ids:
+        
+        response = dynamodb_client.get_item(
+                TableName=USERS_TABLE,
+                Key={'user_id': {'S': user_id}}
+            )
+        
+        user = response.get('Item', [])
+        if not user:
+            error_list.append(f"User with user_id '{user_id}' was not found")
+            continue
+
+        if 'full_name' in update_data:
+            full_name = update_data['full_name']
+            if not full_name:
+                error_list.append(f"Invalid full_name for user_id {user_id}")
+                continue
+            user['full_name'] = {'S': full_name}
+
+        if 'mob_num' in update_data:
+            mob_num = update_data['mob_num']
+            if not is_valid_mobile(mob_num):
+                error_list.append(f"Invalid mob_num for user_id {user_id}")
+                continue
+            user['mob_num'] = {'S': mob_num}
+
+        if 'pan_num' in update_data:
+            pan_num = update_data['pan_num'].upper()
+            if not is_valid_pan(pan_num):
+                error_list.append(f"Invalid pan_num for user_id {user_id}")
+                continue
+            user['pan_num'] = {'S': pan_num}
+        if 'manager_id' in update_data:
+
+                if not user['manager_id']['S']:
+                    user['manager_id'] = {'S': update_data['manager_id']}
+                else:
+                    user["is_active"] = {"BOOL": False}
+                    
+                    dynamodb_client.put_item(
+                        TableName=USERS_TABLE,
+                        Item={
+                            "user_id": {"S": str(uuid.uuid4())},
+                            "full_name": user["full_name"],
+                            "mob_num": user["mob_num"],
+                            "pan_num": user["pan_num"],
+                            "created_at": {"S": datetime.now().isoformat()},
+                            "updated_at": {"S": datetime.now().isoformat()},
+                            "is_active": {"BOOL": True},
+                            "manager_id": {'S': update_data['manager_id']}
+                        },
+                    )
+
+        user['updated_at'] = {'S': datetime.now().isoformat()}
+
+    
+        dynamodb_client.put_item(TableName=USERS_TABLE, Item=user)
+
+    if error_list:
+        return jsonify({"errors": error_list}), 400
+
+    return jsonify({"message": "Users updated successfully"}), 200
